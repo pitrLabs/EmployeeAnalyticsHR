@@ -114,7 +114,9 @@ def create_sample_departments():
     return pd.DataFrame(data)
 
 
-def create_sample_performance(employees_df):
+def create_sample_performance():
+    employees_query = "SELECT employees_id, department_id, job_title, hire_date, status FROM s_employees"
+    employees_df = pd.read_sql_query(employees_query, conn)
     data = []
     current_date = datetime.now()
 
