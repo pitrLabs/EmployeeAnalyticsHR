@@ -3,6 +3,8 @@ import random
 import pandas as pd
 import psycopg2
 from datetime import datetime, timedelta
+
+from dateutil.relativedelta import relativedelta
 from decouple import config
 from faker import Faker
 
@@ -115,14 +117,23 @@ def create_sample_departments():
 
 
 def create_sample_performance():
-    employees_query = "SELECT employees_id, department_id, job_title, hire_date, status FROM s_employees"
+    employees_query = """
+        SELECT employee_id, department_id, manager_id, job_title, hire_date, status 
+        FROM s_employees 
+        WHERE status = 'active' 
+          AND (manager_id IS NOT NULL)
+    """
     employees_df = pd.read_sql_query(employees_query, conn)
     data = []
     current_date = datetime.now()
 
-    for emp_id in employees_df['employee_id']:
-        for year in [2022, 2023, 2024]:
-            review_date = datetime(year, random.randint(1, 12), random.randint(1, 28))
+    for _, row in employees_df.iterrows():
+        emp_id = row['employee_id']
+        hire_date = pd.to_datetime(row['hire_date'])
+        manager_id = row['manager_id']
+
+        for year_offset in range(1, 4):
+            review_date = hire_date + relativedelta(years=year_offset)
 
             if review_date < current_date:
                 review = {
@@ -130,23 +141,30 @@ def create_sample_performance():
                     'employee_id': emp_id,
                     'review_date': review_date,
                     'rating': round(random.uniform(3.0, 5.0), 1),
-                    'reviewer_id': str(uuid.uuid4()),
-                    'comments': f'Performance review for {year}'
+                    'reviewer_id': manager_id,
+                    'comments': f'Performance review {review_date.year}'
                 }
                 data.append(review)
 
     return pd.DataFrame(data)
 
 
-def create_sample_attendance(employees_df, days=90):
+def create_sample_attendance(days):
+    employees_query = "SELECT employee_id, hire_date, status FROM s_employees WHERE status = 'active'"
+    employees_df = pd.read_sql_query(employees_query, conn)
+
     data = []
-    start_date = datetime.now() - timedelta(days=days)
+    today = datetime.now()
 
-    for emp_id in employees_df[employees_df['status'] == 'active']['employee_id']:
-        for day in range(days):
-            date = start_date + timedelta(days=day)
+    for _, row in employees_df.iterrows():
+        emp_id = row['employee_id']
+        hire_date = pd.to_datetime(row['hire_date'])
+        emp_start_date = max(hire_date, today - timedelta(days=days))
 
-            if date.weekday() < 5:  # Only weekdays
+        for day_offset in range((today - emp_start_date).days):
+            date = emp_start_date + timedelta(days=day_offset)
+
+            if date.weekday() < 5:
                 status = random.choices(['present', 'absent', 'late', 'early_departure'],
                                         weights=[0.85, 0.05, 0.07, 0.03])[0]
 
@@ -159,14 +177,13 @@ def create_sample_attendance(employees_df, days=90):
                 else:
                     hours = 0
 
-                attendance = {
+                data.append({
                     'attendance_id': str(uuid.uuid4()),
                     'employee_id': emp_id,
                     'date': date,
                     'status': status,
                     'hours_worked': round(hours, 2)
-                }
-                data.append(attendance)
+                })
 
     return pd.DataFrame(data)
 
@@ -214,14 +231,14 @@ def load_to_postgres(df, table_name, conn):
 if __name__ == "__main__":
     departments_df = create_sample_departments()
     employees_df = create_sample_employees(200)
-    performance_df = create_sample_performance(employees_df)
-    attendance_df = create_sample_attendance(employees_df, days=90)
+    performance_df = create_sample_performance()
+    attendance_df = create_sample_attendance(90)
     training_df = create_sample_training(employees_df)
 
     # load_to_postgres(departments_df, "s_departments", conn)
     # load_to_postgres(employees_df, "s_employees", conn)
     # load_to_postgres(performance_df, "s_performance", conn)
-    # load_to_postgres(attendance_df, "s_attendance", conn)
+    load_to_postgres(attendance_df, "s_attendance", conn)
     # load_to_postgres(training_df, "s_training", conn)
 
     conn.close()
