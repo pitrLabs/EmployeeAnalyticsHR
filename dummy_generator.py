@@ -1,18 +1,18 @@
+import mysql.connector
 import uuid
 import random
 import pandas as pd
 import psycopg2
 from datetime import datetime, timedelta
-
 from dateutil.relativedelta import relativedelta
 from decouple import config
 from faker import Faker
 
-conn = psycopg2.connect(host=config("PSQL_HOST"),
-                        database=config("PSQL_DB"),
-                        user=config("PSQL_USER"),
-                        password=config("PSQL_PASS"),
-                        port=config("PSQL_PORT"))
+conn = mysql.connector.connect(host=config("MSQL_HOST"),
+                        database=config("MSQL_DB"),
+                        user=config("MSQL_USER"),
+                        password=config("MSQL_PASS"),
+                        port=config("MSQL_PORT"))
 fake = Faker('id_ID')
 
 
@@ -21,87 +21,91 @@ def create_sample_employees(n):
     departments_df = pd.read_sql_query(departments_query, conn)
 
     if departments_df.empty:
-        raise ValueError("Tidak ada data departemen ditemukan dalam database")
+        pass
+        # raise ValueError("Tidak ada data departemen ditemukan dalam database")
 
-    job_titles = {
-        'IT': ['Software Engineer', 'Data Analyst', 'System Admin', 'IT Manager'],
-        'HR': ['HR Specialist', 'Recruiter', 'HR Manager', 'Training Coordinator'],
-        'Finance': ['Accountant', 'Financial Analyst', 'Finance Manager', 'Auditor'],
-        'Marketing': ['Marketing Specialist', 'Content Creator', 'Marketing Manager', 'SEO Analyst'],
-        'Operations': ['Operations Manager', 'Logistics Coordinator', 'Supply Chain Specialist'],
-        'Sales': ['Sales Representative', 'Account Manager', 'Sales Manager', 'Business Development']
-    }
+    else:
 
-    data = []
-    start_date = datetime(2018, 1, 1)
-    departments = departments_df['department_name'].tolist()
-    managers_by_dept = {d: [] for d in departments}
 
-    for dept in departments:
-        available_titles = job_titles[dept]
-        mgr_titles = [t for t in available_titles if 'Manager' in t]
-
-        mgr_id = str(uuid.uuid4())
-        hire_date = start_date + timedelta(days=random.randint(0, 500))
-        dept_row = departments_df.loc[departments_df['department_name'] == dept]
-
-        if dept_row.empty:
-            continue
-
-        dept_id = dept_row['department_id'].iloc[0]
-
-        manager = {
-            'employee_id': mgr_id,
-            'first_name': fake.first_name(),
-            'last_name': fake.last_name(),
-            'email': f"{fake.user_name()}@example.co.id",
-            'department_id': dept_id,
-            'job_title': mgr_titles[0],
-            'hire_date': hire_date,
-            'salary': random.randint(80000000, 200000000),
-            'manager_id': None,
-            'status': 'active'
+        job_titles = {
+            'IT': ['Software Engineer', 'Data Analyst', 'System Admin', 'IT Manager'],
+            'HR': ['HR Specialist', 'Recruiter', 'HR Manager', 'Training Coordinator'],
+            'Finance': ['Accountant', 'Financial Analyst', 'Finance Manager', 'Auditor'],
+            'Marketing': ['Marketing Specialist', 'Content Creator', 'Marketing Manager', 'SEO Analyst'],
+            'Operations': ['Operations Manager', 'Logistics Coordinator', 'Supply Chain Specialist'],
+            'Sales': ['Sales Representative', 'Account Manager', 'Sales Manager', 'Business Development']
         }
-        data.append(manager)
-        managers_by_dept[dept].append(mgr_id)
 
-    managers_count = sum(len(v) for v in managers_by_dept.values())
-    remaining = max(0, n - managers_count)
+        data = []
+        start_date = datetime(2018, 1, 1)
+        departments = departments_df['department_name'].tolist()
+        managers_by_dept = {d: [] for d in departments}
 
-    for _ in range(remaining):
-        dept_row = departments_df.sample(1).iloc[0]
-        dept = dept_row['department_name']
-        dept_id = dept_row['department_id']
+        for dept in departments:
+            available_titles = job_titles[dept]
+            mgr_titles = [t for t in available_titles if 'Manager' in t]
 
-        available_titles = job_titles[dept]
-        mgr_titles = [t for t in available_titles if
-                      t in ['IT Manager', 'HR Manager', 'Finance Manager',
-                            'Marketing Manager', 'Operations Manager', 'Sales Manager']]
-        non_mgr_titles = [t for t in available_titles if
-                          t not in ['IT Manager', 'HR Manager', 'Finance Manager',
-                                    'Marketing Manager', 'Operations Manager', 'Sales Manager']]
+            mgr_id = str(uuid.uuid4())
+            hire_date = start_date + timedelta(days=random.randint(0, 500))
+            dept_row = departments_df.loc[departments_df['department_name'] == dept]
 
-        job = random.choice(non_mgr_titles)
-        emp_id = str(uuid.uuid4())
-        hire_date = start_date + timedelta(days=random.randint(0, 1000))
-        manager_id = random.choice(managers_by_dept[dept]) if managers_by_dept[dept] else None
+            if dept_row.empty:
+                continue
 
-        employee = {
-            'employee_id': emp_id,
-            'first_name': fake.first_name(),
-            'last_name': fake.last_name(),
-            'email': f"{fake.user_name()}@example.co.id",
-            'department_id': dept_id,
-            'job_title': job,
-            'hire_date': hire_date,
-            'salary': random.randint(30000000, 120000000),
-            'manager_id': manager_id,
-            'status': random.choices(['active', 'resigned', 'terminated'],
-                                     weights=[0.8, 0.15, 0.05])[0]
-        }
-        data.append(employee)
+            dept_id = dept_row['department_id'].iloc[0]
 
-    return pd.DataFrame(data)
+            manager = {
+                'employee_id': mgr_id,
+                'first_name': fake.first_name(),
+                'last_name': fake.last_name(),
+                'email': f"{fake.user_name()}@example.co.id",
+                'department_id': dept_id,
+                'job_title': mgr_titles[0],
+                'hire_date': hire_date,
+                'salary': random.randint(80000000, 200000000),
+                'manager_id': None,
+                'status': 'active'
+            }
+            data.append(manager)
+            managers_by_dept[dept].append(mgr_id)
+
+        managers_count = sum(len(v) for v in managers_by_dept.values())
+        remaining = max(0, n - managers_count)
+
+        for _ in range(remaining):
+            dept_row = departments_df.sample(1).iloc[0]
+            dept = dept_row['department_name']
+            dept_id = dept_row['department_id']
+
+            available_titles = job_titles[dept]
+            mgr_titles = [t for t in available_titles if
+                          t in ['IT Manager', 'HR Manager', 'Finance Manager',
+                                'Marketing Manager', 'Operations Manager', 'Sales Manager']]
+            non_mgr_titles = [t for t in available_titles if
+                              t not in ['IT Manager', 'HR Manager', 'Finance Manager',
+                                        'Marketing Manager', 'Operations Manager', 'Sales Manager']]
+
+            job = random.choice(non_mgr_titles)
+            emp_id = str(uuid.uuid4())
+            hire_date = start_date + timedelta(days=random.randint(0, 1000))
+            manager_id = random.choice(managers_by_dept[dept]) if managers_by_dept[dept] else None
+
+            employee = {
+                'employee_id': emp_id,
+                'first_name': fake.first_name(),
+                'last_name': fake.last_name(),
+                'email': f"{fake.user_name()}@example.co.id",
+                'department_id': dept_id,
+                'job_title': job,
+                'hire_date': hire_date,
+                'salary': random.randint(30000000, 120000000),
+                'manager_id': manager_id,
+                'status': random.choices(['active', 'resigned', 'terminated'],
+                                         weights=[0.8, 0.15, 0.05])[0]
+            }
+            data.append(employee)
+
+        return pd.DataFrame(data)
 
 
 def create_sample_departments():
@@ -188,7 +192,14 @@ def create_sample_attendance(days):
     return pd.DataFrame(data)
 
 
-def create_sample_training(employees_df):
+def create_sample_training():
+    employees_query = """
+        SELECT employee_id, department_id, manager_id, job_title, hire_date, status 
+        FROM s_employees 
+        WHERE status = 'active' 
+          AND (manager_id IS NOT NULL)
+    """
+    employees_df = pd.read_sql_query(employees_query, conn)
     trainings = [
         {'name': 'Leadership Workshop', 'category': 'Soft Skills'},
         {'name': 'Coding', 'category': 'Technical'},
@@ -196,20 +207,22 @@ def create_sample_training(employees_df):
         {'name': 'Communication Skills', 'category': 'Soft Skills'},
         {'name': 'Project Management', 'category': 'Management'}
     ]
-
     data = []
-    for training in trainings:
-        participants = random.sample(list(employees_df['employee_id']), random.randint(15, 30))
-        for emp_id in participants:
-            participant = {
-                'training_id': str(uuid.uuid4()),
-                'employee_id': emp_id,
-                'training_name': training['name'],
-                'category': training['category'],
-                'score': round(random.uniform(60, 100), 2),
-                'completion_date': datetime(2024, random.randint(1, 12), random.randint(1, 28))
-            }
-            data.append(participant)
+
+    for _, row in employees_df.iterrows():
+        emp_id = row['employee_id']
+        for training in trainings:
+            participants = random.sample(list(employees_df['employee_id']), random.randint(15, 30))
+            for emp_id in participants:
+                participant = {
+                    'training_id': str(uuid.uuid4()),
+                    'employee_id': emp_id,
+                    'training_name': training['name'],
+                    'category': training['category'],
+                    'score': round(random.uniform(60, 100), 2),
+                    'completion_date': datetime(2024, random.randint(1, 12), random.randint(1, 28))
+                }
+                data.append(participant)
 
     return pd.DataFrame(data)
 
@@ -233,12 +246,12 @@ if __name__ == "__main__":
     employees_df = create_sample_employees(200)
     performance_df = create_sample_performance()
     attendance_df = create_sample_attendance(90)
-    training_df = create_sample_training(employees_df)
+    training_df = create_sample_training()
 
-    # load_to_postgres(departments_df, "s_departments", conn)
+    load_to_postgres(departments_df, "s_departments", conn)
     # load_to_postgres(employees_df, "s_employees", conn)
     # load_to_postgres(performance_df, "s_performance", conn)
-    load_to_postgres(attendance_df, "s_attendance", conn)
+    # load_to_postgres(attendance_df, "s_attendance", conn)
     # load_to_postgres(training_df, "s_training", conn)
 
     conn.close()

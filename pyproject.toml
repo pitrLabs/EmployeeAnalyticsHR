@@ -17,4 +17,5 @@ dependencies = [
     "seaborn>=0.13.2",
     "python-decouple>=3.8",
     "psycopg2-binary>=2.9.10",
+    "mysql-connector-python>=9.4.0",
 ]
