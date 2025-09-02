@@ -8,11 +8,18 @@ from dateutil.relativedelta import relativedelta
 from decouple import config
 from faker import Faker
 
-conn = mysql.connector.connect(host=config("MSQL_HOST"),
-                        database=config("MSQL_DB"),
-                        user=config("MSQL_USER"),
-                        password=config("MSQL_PASS"),
-                        port=config("MSQL_PORT"))
+# conn = mysql.connector.connect(host=config("MSQL_HOST"),
+#                         database=config("MSQL_DB"),
+#                         user=config("MSQL_USER"),
+#                         password=config("MSQL_PASS"),
+#                         port=config("MSQL_PORT"))
+
+conn = psycopg2.connect(host=config("PSQL_HOST2"),
+                        database=config("PSQL_DB2"),
+                        user=config("PSQL_USER2"),
+                        password=config("PSQL_PASS2"),
+                        port=config("PSQL_PORT2"))
+
 fake = Faker('id_ID')
 
 
@@ -22,11 +29,8 @@ def create_sample_employees(n):
 
     if departments_df.empty:
         pass
-        # raise ValueError("Tidak ada data departemen ditemukan dalam database")
 
     else:
-
-
         job_titles = {
             'IT': ['Software Engineer', 'Data Analyst', 'System Admin', 'IT Manager'],
             'HR': ['HR Specialist', 'Recruiter', 'HR Manager', 'Training Coordinator'],
@@ -196,33 +200,79 @@ def create_sample_training():
     employees_query = """
         SELECT employee_id, department_id, manager_id, job_title, hire_date, status 
         FROM s_employees 
-        WHERE status = 'active' 
-          AND (manager_id IS NOT NULL)
+        WHERE status = 'active'
     """
     employees_df = pd.read_sql_query(employees_query, conn)
-    trainings = [
-        {'name': 'Leadership Workshop', 'category': 'Soft Skills'},
-        {'name': 'Coding', 'category': 'Technical'},
-        {'name': 'Data Analysis', 'category': 'Technical'},
-        {'name': 'Communication Skills', 'category': 'Soft Skills'},
-        {'name': 'Project Management', 'category': 'Management'}
-    ]
+
+    employees_df['hire_date'] = pd.to_datetime(employees_df['hire_date'],
+                                               errors='coerce',
+                                               format='%Y-%m-%d')
+
+    job_training_map = {
+        'Software Engineer': ['Coding', 'Data Analysis'],
+        'Data Analyst': ['Data Analysis', 'Coding'],
+        'System Admin': ['Coding', 'Project Management'],
+        'IT Manager': ['Leadership Workshop', 'Project Management'],
+
+        'HR Specialist': ['Communication Skills', 'Project Management'],
+        'Recruiter': ['Communication Skills', 'Leadership Workshop'],
+        'HR Manager': ['Leadership Workshop', 'Project Management'],
+        'Training Coordinator': ['Communication Skills', 'Project Management'],
+
+        'Accountant': ['Data Analysis', 'Project Management'],
+        'Financial Analyst': ['Data Analysis', 'Coding'],
+        'Finance Manager': ['Leadership Workshop', 'Project Management'],
+        'Auditor': ['Data Analysis', 'Communication Skills'],
+
+        'Marketing Specialist': ['Communication Skills', 'Project Management'],
+        'Content Creator': ['Communication Skills'],
+        'Marketing Manager': ['Leadership Workshop', 'Project Management'],
+        'SEO Analyst': ['Data Analysis', 'Communication Skills'],
+
+        'Operations Manager': ['Leadership Workshop', 'Project Management'],
+        'Logistics Coordinator': ['Project Management', 'Communication Skills'],
+        'Supply Chain Specialist': ['Data Analysis', 'Project Management'],
+
+        'Sales Representative': ['Communication Skills'],
+        'Account Manager': ['Project Management', 'Communication Skills'],
+        'Sales Manager': ['Leadership Workshop', 'Project Management'],
+        'Business Development': ['Leadership Workshop', 'Communication Skills']
+    }
+
+    training_info = {
+        'Leadership Workshop': 'Soft Skills',
+        'Coding': 'Technical',
+        'Data Analysis': 'Technical',
+        'Communication Skills': 'Soft Skills',
+        'Project Management': 'Management'
+    }
+
     data = []
 
     for _, row in employees_df.iterrows():
         emp_id = row['employee_id']
-        for training in trainings:
-            participants = random.sample(list(employees_df['employee_id']), random.randint(15, 30))
-            for emp_id in participants:
-                participant = {
-                    'training_id': str(uuid.uuid4()),
-                    'employee_id': emp_id,
-                    'training_name': training['name'],
-                    'category': training['category'],
-                    'score': round(random.uniform(60, 100), 2),
-                    'completion_date': datetime(2024, random.randint(1, 12), random.randint(1, 28))
-                }
-                data.append(participant)
+        job_title = row['job_title']
+        hire_date = row['hire_date']
+        manager_id = row['manager_id']
+
+        if pd.isna(hire_date) or job_title not in job_training_map:
+            continue
+
+        trainings = job_training_map[job_title]
+
+        for t in trainings:
+            if t == 'Project Management' and pd.notna(manager_id):
+                continue
+
+            participant = {
+                'training_id': str(uuid.uuid4()),
+                'employee_id': emp_id,
+                'training_name': t,
+                'category': training_info[t],
+                'score': round(random.uniform(60, 100), 2),
+                'completion_date': hire_date + relativedelta(months=6)
+            }
+            data.append(participant)
 
     return pd.DataFrame(data)
 
@@ -248,10 +298,10 @@ if __name__ == "__main__":
     attendance_df = create_sample_attendance(90)
     training_df = create_sample_training()
 
-    load_to_postgres(departments_df, "s_departments", conn)
+    # load_to_postgres(departments_df, "s_departments", conn)
     # load_to_postgres(employees_df, "s_employees", conn)
     # load_to_postgres(performance_df, "s_performance", conn)
     # load_to_postgres(attendance_df, "s_attendance", conn)
-    # load_to_postgres(training_df, "s_training", conn)
+    load_to_postgres(training_df, "s_training", conn)
 
     conn.close()
